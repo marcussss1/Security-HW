@@ -9,22 +9,27 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"security/store"
 )
 
-type proxy struct{}
+type Proxy struct {
+	store store.Store
+}
 
-func StartServer() {
+func NewServer(store store.Store) Proxy {
+	return Proxy{store: store}
+}
+
+func (p Proxy) StartServer() {
 	e := echo.New()
-	proxyHandler := &proxy{}
-	e.Any("/*", proxyHandler.Handle)
+	e.Any("/*", p.Handle)
 	e.Logger.Fatal(e.Start(":8081"))
 }
 
-func StartServerTLS() {
+func (p Proxy) StartServerTLS() {
 	e := echo.New()
-	proxyHandler := &proxy{}
-	e.Any("/*", proxyHandler.Handle)
-	
+	e.Any("/*", p.Handle)
+
 	server := &http.Server{
 		Addr:         ":8081",
 		Handler:      e,
@@ -36,13 +41,13 @@ func StartServerTLS() {
 		e.Logger.Fatal(err)
 	}
 
-	err = server.ListenAndServeTLS("cert.pem", "key.pem")
+	err = server.ListenAndServeTLS("certs/server.pem", "certs/server.key")
 	if err != nil {
 		e.Logger.Fatal(err)
 	}
 }
 
-func (p *proxy) Handle(ctx echo.Context) error {
+func (p Proxy) Handle(ctx echo.Context) error {
 	if ctx.Request().Method == http.MethodConnect {
 		return p.HttpsHandle(ctx)
 	}
@@ -50,7 +55,7 @@ func (p *proxy) Handle(ctx echo.Context) error {
 	return p.HttpHandle(ctx)
 }
 
-func (p *proxy) HttpHandle(ctx echo.Context) error {
+func (p Proxy) HttpHandle(ctx echo.Context) error {
 	requestUrlString := getUrlFromContext(ctx)
 	requestUrl, err := url.Parse(requestUrlString)
 	if err != nil {
@@ -60,16 +65,18 @@ func (p *proxy) HttpHandle(ctx echo.Context) error {
 	ctx.Request().URL = requestUrl
 	ctx.Request().Header.Del("Proxy-Connection")
 
+	go p.store.SaveRequest(ctx.Request())
 	resp, err := http.DefaultTransport.RoundTrip(ctx.Request())
 	if err != nil {
 		return err
 	}
+	go p.store.SaveResponse(resp)
 	copyHeaders(ctx.Response().Header(), resp.Header)
 
 	return ctx.NoContent(http.StatusOK)
 }
 
-func (p *proxy) HttpsHandle(ctx echo.Context) error {
+func (p Proxy) HttpsHandle(ctx echo.Context) error {
 	dest, err := net.Dial("tcp", ctx.Request().Host)
 	if err != nil {
 		return err
@@ -95,6 +102,7 @@ func getUrlFromContext(ctx echo.Context) string {
 	protocol := ctx.Request().URL.Scheme
 	host := ctx.Request().Host
 	path := ctx.Request().URL.Path
+
 	return protocol + "://" + host + path
 }
 
@@ -109,5 +117,6 @@ func copyHeaders(dst, src http.Header) {
 func transfer(destination io.WriteCloser, source io.ReadCloser) {
 	defer destination.Close()
 	defer source.Close()
+
 	io.Copy(destination, source)
 }
