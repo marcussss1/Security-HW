@@ -38,12 +38,12 @@ func (p Proxy) StartServerTLS() {
 
 	err := http2.ConfigureServer(server, nil)
 	if err != nil {
-		e.Logger.Fatal(err)
+		panic(err)
 	}
 
 	err = server.ListenAndServeTLS("certs/server.pem", "certs/server.key")
 	if err != nil {
-		e.Logger.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -59,7 +59,7 @@ func (p Proxy) HttpHandle(ctx echo.Context) error {
 	requestUrlString := getUrlFromContext(ctx)
 	requestUrl, err := url.Parse(requestUrlString)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	ctx.Request().URL = requestUrl
@@ -68,28 +68,38 @@ func (p Proxy) HttpHandle(ctx echo.Context) error {
 	go p.store.SaveRequest(ctx.Request())
 	resp, err := http.DefaultTransport.RoundTrip(ctx.Request())
 	if err != nil {
-		return err
+		panic(err)
 	}
 	go p.store.SaveResponse(resp)
 	copyHeaders(ctx.Response().Header(), resp.Header)
 
-	return ctx.NoContent(http.StatusOK)
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	_, err = ctx.Response().Write(responseBody)
+	if err != nil {
+		panic(err)
+	}
+
+	return ctx.JSON(http.StatusOK, ctx.Response())
 }
 
 func (p Proxy) HttpsHandle(ctx echo.Context) error {
 	dest, err := net.Dial("tcp", ctx.Request().Host)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	hijacker, ok := ctx.Response().Writer.(http.Hijacker)
 	if !ok {
-		return errors.New("hjacker")
+		panic(errors.New("hjacker"))
 	}
 
 	client, _, err := hijacker.Hijack()
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	go transfer(dest, client)
@@ -100,8 +110,16 @@ func (p Proxy) HttpsHandle(ctx echo.Context) error {
 
 func getUrlFromContext(ctx echo.Context) string {
 	protocol := ctx.Request().URL.Scheme
-	host := ctx.Request().Host
+	host, port, _ := net.SplitHostPort(ctx.Request().Host)
+	if host == "" {
+		host = ctx.Request().Host
+	}
+
 	path := ctx.Request().URL.Path
+
+	if host == "localhost" || host == "127.0.0.1" && port == "8001" {
+		host = "api:8001"
+	}
 
 	return protocol + "://" + host + path
 }

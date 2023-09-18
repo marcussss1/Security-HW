@@ -15,6 +15,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile-proxy
+    # включать https или нет
+    environment:
+      - HTTPS=false
     container_name: proxy
     ports:
       - "8081:8081"

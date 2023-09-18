@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -90,4 +91,43 @@ func ParseResponse(resp *http.Response) model.Response {
 	}
 
 	return parsedResp
+}
+
+func ParseRepeatRequest(request model.Request) *http.Request {
+	var err error
+	var repeatRequest *http.Request
+
+	if request.Body != "" {
+		jsonData, errIn := json.Marshal(request.Body)
+		if errIn != nil {
+			panic(errIn)
+		}
+
+		repeatRequest, err = http.NewRequest(request.Method, request.Path, bytes.NewBuffer(jsonData))
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		repeatRequest, err = http.NewRequest(request.Method, request.Path, nil)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// cookie
+	for k, v := range request.Cookies {
+		repeatRequest.AddCookie(&http.Cookie{
+			Name:  k,
+			Value: v,
+		})
+	}
+
+	// headers
+	for k, v := range request.Headers {
+		for _, vv := range v {
+			repeatRequest.Header.Add(k, vv)
+		}
+	}
+
+	return repeatRequest
 }

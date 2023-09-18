@@ -1,10 +1,13 @@
 package store
 
 import (
+	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/net/context"
 	"net/http"
+	"security/model"
 	"security/parser"
 )
 
@@ -30,6 +33,7 @@ func NewStore() (Store, error) {
 
 func (s *Store) SaveRequest(req *http.Request) {
 	parsedReq := parser.ParseRequest(req)
+	parsedReq.ID = uuid.NewString()
 
 	_, err := s.requestCollection.InsertOne(context.TODO(), parsedReq)
 	if err != nil {
@@ -39,9 +43,37 @@ func (s *Store) SaveRequest(req *http.Request) {
 
 func (s *Store) SaveResponse(resp *http.Response) {
 	parsedResp := parser.ParseResponse(resp)
+	parsedResp.ID = uuid.NewString()
 
 	_, err := s.responseCollection.InsertOne(context.TODO(), parsedResp)
 	if err != nil {
 		panic(err)
 	}
+}
+
+func (s *Store) GetRequests() []model.Request {
+	var requests []model.Request
+
+	cursor, err := s.requestCollection.Find(context.TODO(), bson.D{})
+	if err != nil {
+		panic(err)
+	}
+
+	err = cursor.All(context.TODO(), &requests)
+	if err != nil {
+		panic(err)
+	}
+
+	return requests
+}
+
+func (s *Store) GetRequestByID(id string) model.Request {
+	var request model.Request
+
+	err := s.requestCollection.FindOne(context.TODO(), bson.M{"_id": id}).Decode(&request)
+	if err != nil {
+		panic(err)
+	}
+
+	return request
 }

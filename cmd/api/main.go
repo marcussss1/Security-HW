@@ -2,8 +2,16 @@ package main
 
 import (
 	"security/api_server"
+	"security/store"
 )
 
 func main() {
-	api_server.StartServer()
+	storage, err := store.NewStore()
+	if err != nil {
+		panic(err)
+	}
+
+	server := api_server.NewServer(storage)
+
+	server.StartServer()
 }

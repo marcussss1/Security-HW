@@ -1,7 +1,7 @@
 package model
 
 type Response struct {
-	ID      int64
+	ID      string
 	Code    int
 	Message string
 	Body    string

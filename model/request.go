@@ -1,7 +1,7 @@
 package model
 
 type Request struct {
-	ID         int64               `json:"id"`
+	ID         string              `bson:"_id,omitempty" json:"id"`
 	Method     string              `json:"method"`
 	Path       string              `json:"path"`
 	Body       string              `json:"body"`
