@@ -21,7 +21,7 @@ func (s Server) StartServer() {
 
 	e.GET("/requests", apiServerHandler.GetRequests)
 	e.GET("/requests/:id", apiServerHandler.GetRequestByID)
-	e.POST("/repeat/:id", apiServerHandler.RepeatRequestByID)
+	e.GET("/repeat/:id", apiServerHandler.RepeatRequestByID)
 	e.GET("/scan/:id", apiServerHandler.ScanRequestByID)
 
 	e.Logger.Fatal(e.Start(":8001"))
